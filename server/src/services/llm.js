@@ -32,7 +32,7 @@ export function streamReply({ system, messages }) {
 export async function generateTitle(prompt, response) {
   const r = await getClient().chat.completions.create({
     model: process.env.MODEL,
-    max_tokens: 20,
+    max_tokens: 300,
     messages: [
       { role: 'system', content: 'Write a short title (max 5 words) for this conversation. Reply with the title only, no quotes.' },
       { role: 'user', content: `User: ${prompt}\nAssistant: ${response.slice(0, 500)}` },
