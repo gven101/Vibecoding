@@ -1,7 +1,9 @@
 import OpenAI from 'openai';
 
-const client = new OpenAI({ apiKey: process.env.AI_API_KEY, baseURL: process.env.AI_BASE_URL });
-const MODEL = process.env.MODEL;
+// Create the client lazily so .env is definitely loaded first
+let client;
+const getClient = () =>
+  (client ??= new OpenAI({ apiKey: process.env.AI_API_KEY, baseURL: process.env.AI_BASE_URL }));
 
 // Streams the AI reply. Returns { on('text'), finalMessage(), abort() }
 export function streamReply({ system, messages }) {
@@ -9,8 +11,8 @@ export function streamReply({ system, messages }) {
   const listeners = [];
 
   const done = (async () => {
-    const stream = await client.chat.completions.create(
-      { model: MODEL, stream: true, messages: [{ role: 'system', content: system }, ...messages] },
+    const stream = await getClient().chat.completions.create(
+      { model: process.env.MODEL, stream: true, messages: [{ role: 'system', content: system }, ...messages] },
       { signal: controller.signal }
     );
     for await (const chunk of stream) {
@@ -28,8 +30,8 @@ export function streamReply({ system, messages }) {
 
 // Extra feature 1: AI-generated conversation title
 export async function generateTitle(prompt, response) {
-  const r = await client.chat.completions.create({
-    model: MODEL,
+  const r = await getClient().chat.completions.create({
+    model: process.env.MODEL,
     max_tokens: 20,
     messages: [
       { role: 'system', content: 'Write a short title (max 5 words) for this conversation. Reply with the title only, no quotes.' },
