@@ -1,122 +1,94 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useRef, useState } from 'react';
+import Sidebar from './components/Sidebar';
+import ChatView from './components/ChatView';
+import * as api from './api';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [conversations, setConversations] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [exchanges, setExchanges] = useState([]);
+  const [tones, setTones] = useState([]);
+  const [tone, setTone] = useState('professional');
+  const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState('');
+  const queueRef = useRef('');   // text waiting to be "typed"
+  const abortRef = useRef(null); // for the Stop button
+
+  const refreshList = () => api.getConversations().then(setConversations);
+  useEffect(() => { refreshList(); api.getTones().then(setTones); }, []);
+
+  // Typewriter effect: show queued text character by character
+  useEffect(() => {
+    const id = setInterval(() => {
+      const q = queueRef.current;
+      if (!q) return;
+      const n = Math.max(1, Math.ceil(q.length / 60));
+      queueRef.current = q.slice(n);
+      setExchanges((prev) => {
+        if (!prev.length) return prev;
+        const copy = [...prev];
+        const last = { ...copy[copy.length - 1] };
+        last.response += q.slice(0, n);
+        copy[copy.length - 1] = last;
+        return copy;
+      });
+    }, 15);
+    return () => clearInterval(id);
+  }, []);
+
+  const resetView = () => { queueRef.current = ''; setError(''); };
+
+  const selectConversation = async (id) => {
+    if (streaming) return;
+    resetView();
+    setActiveId(id);
+    const c = await api.getConversation(id);
+    setExchanges(c.exchanges || []);
+  };
+
+  const newChat = () => { if (streaming) return; resetView(); setActiveId(null); setExchanges([]); };
+
+  const deleteChat = async (id) => {
+    await api.deleteConversation(id);
+    if (id === activeId) newChat();
+    refreshList();
+  };
+
+  const send = async (prompt) => {
+    setError('');
+    setExchanges((prev) => [...prev, { prompt, response: '', tone, timestamp: new Date().toISOString() }]);
+    setStreaming(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      await api.streamChat({
+        conversationId: activeId, prompt, tone, signal: controller.signal,
+        onEvent: (event, data) => {
+          if (event === 'meta') setActiveId(data.conversationId);
+          if (event === 'delta') queueRef.current += data.text;
+          if (event === 'error') setError(data.error);
+        },
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        setExchanges((prev) => prev.map((ex, i) => (i === prev.length - 1 ? { ...ex, stopped: true } : ex)));
+      } else {
+        setError(e.message);
+        setExchanges((prev) => prev.slice(0, -1));
+      }
+    } finally {
+      setStreaming(false);
+      setTimeout(refreshList, 800);
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <div className="app">
+      <Sidebar conversations={conversations} activeId={activeId}
+        onSelect={selectConversation} onNew={newChat} onDelete={deleteChat} />
+      <ChatView exchanges={exchanges} tones={tones} tone={tone} setTone={setTone}
+        streaming={streaming} onSend={send} onStop={() => abortRef.current?.abort()} error={error} />
+    </div>
+  );
 }
-
-export default App
