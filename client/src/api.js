@@ -1,4 +1,4 @@
-const BASE = 'http://localhost:5000/api';
+const BASE = 'http://localhost:5001/api';
 
 export const getConversations = () => fetch(`${BASE}/conversations`).then((r) => r.json());
 export const getConversation = (id) => fetch(`${BASE}/conversations/${id}`).then((r) => r.json());
